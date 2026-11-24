@@ -1,4 +1,5 @@
-﻿@using BadNews.Repositories.Comments
+﻿@using System.Net.Http
+@using BadNews.Repositories.Comments
 @using Microsoft.AspNetCore.SignalR.Client
 @inject CommentsRepository commentsRepository;
 @inject NavigationManager navigationManager
@@ -38,17 +39,27 @@
     protected override async Task OnInitializedAsync()
     {
         hubConnection = new HubConnectionBuilder()
-            .WithUrl(navigationManager.ToAbsoluteUri("/commentsHub"))
+            .WithUrl(navigationManager.ToAbsoluteUri("/commentsHub")/*, options =>
+            {
+                options.HttpMessageHandlerFactory = _ => new HttpClientHandler
+                {
+                    ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                };
+            }*/)
             .Build();
 
         hubConnection.On<string, string>("ReceiveComment", (user, message) =>
         {
-            var comment = new Comment(user, message);
-            comments.Add(comment);
-            StateHasChanged();
+            InvokeAsync(() =>
+            {
+                var comment = new Comment(user, message);
+                comments.Add(comment);
+                StateHasChanged();
+            });
         });
 
-        await hubConnection.StartAsync().ConfigureAwait(false);
+        await hubConnection.StartAsync();
     }
 
     private async Task Send()
